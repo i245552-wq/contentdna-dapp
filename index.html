@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ContentDNA mini</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Karla:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+
+    <header>
+      <img src="logo.svg" alt="ContentDNA fingerprint logo" width="72" height="72">
+      <h1>Prove you made it first.</h1>
+      <p>
+        Pick any file you made, and this page saves its fingerprint on the Sepolia
+        testnet with your wallet and the time. The file never leaves your computer,
+        only the fingerprint does.
+      </p>
+    </header>
+
+    <section>
+      <h2>How it works</h2>
+      <ol>
+        <li>Connect MetaMask (make sure it's on Sepolia).</li>
+        <li>Choose a file. Your browser makes its SHA-256 fingerprint.</li>
+        <li>Give it a title and register it.</li>
+        <li>Anyone can check the same file later and see who registered it.</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>Wallet</h2>
+      <button id="connectBtn">Connect MetaMask</button>
+      <p id="walletInfo" class="muted">Not connected yet.</p>
+    </section>
+
+    <section class="card">
+      <h2>Your file</h2>
+      <label for="fileInput">Choose a file</label>
+      <input type="file" id="fileInput">
+      <p class="muted">Fingerprint:</p>
+      <code id="fileHash">(no file chosen)</code>
+
+      <label for="titleInput">Title</label>
+      <input type="text" id="titleInput" placeholder="e.g. Sunset crochet bag pattern">
+
+      <div class="row">
+        <button id="registerBtn">Register this file</button>
+        <button id="lookupBtn" class="secondary">Check this file</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Transfer ownership</h2>
+      <p class="muted">Uses the file chosen above. Only the current owner can do this.</p>
+      <label for="transferTo">New owner's wallet address</label>
+      <input type="text" id="transferTo" placeholder="0x...">
+      <button id="transferBtn" class="secondary">Transfer ownership</button>
+    </section>
+
+    <section class="card">
+      <h2>Registry</h2>
+      <p>Files registered so far: <strong id="totalCount">-</strong></p>
+      <button id="refreshBtn" class="secondary">Refresh count</button>
+    </section>
+
+    <section>
+      <h2>What just happened</h2>
+      <div id="statusBox" class="status">Nothing yet. Connect your wallet to start.</div>
+      <p id="txLine"></p>
+    </section>
+
+    <footer>
+      <p>
+        Built for MG3012, Blockchain Technology for Business.
+        Useful links:
+        <a href="https://remix.ethereum.org" target="_blank" rel="noopener">Remix IDE</a>,
+        <a href="https://sepolia.etherscan.io" target="_blank" rel="noopener">Sepolia Etherscan</a>,
+        <a href="https://docs.ethers.org/v6/" target="_blank" rel="noopener">ethers.js docs</a>.
+      </p>
+    </footer>
+
+  </main>
+
+  <!-- ethers.js v6 from cdnjs -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+
+  <script>
+    // ====== CHANGE THIS after you deploy in Remix ======
+    const CONTRACT_ADDRESS = "0xCC62c17d570ab8cbd85c1cFFf3D34001054E5Bb8";
+    // ===================================================
+
+    // human-readable ABI, just the functions I actually use
+    const ABI = [
+      "function registerContent(bytes32 fingerprint, string title)",
+      "function getContent(bytes32 fingerprint) view returns (address creator, string title, uint256 registeredAt)",
+      "function isRegistered(bytes32 fingerprint) view returns (bool)",
+      "function transferOwnership(bytes32 fingerprint, address newOwner)",
+      "function totalRegistered() view returns (uint256)"
+    ];
+
+    const SEPOLIA_CHAIN_ID = 11155111n;
+
+    let provider = null;
+    let signer = null;
+    let contract = null;
+    let currentHash = null; // fingerprint of the file picked right now
+
+    // grabbing the elements once so I don't keep calling getElementById
+    const connectBtn   = document.getElementById("connectBtn");
+    const walletInfo   = document.getElementById("walletInfo");
+    const fileInput    = document.getElementById("fileInput");
+    const fileHashBox  = document.getElementById("fileHash");
+    const titleInput   = document.getElementById("titleInput");
+    const registerBtn  = document.getElementById("registerBtn");
+    const lookupBtn    = document.getElementById("lookupBtn");
+    const transferTo   = document.getElementById("transferTo");
+    const transferBtn  = document.getElementById("transferBtn");
+    const refreshBtn   = document.getElementById("refreshBtn");
+    const totalCount   = document.getElementById("totalCount");
+    const statusBox    = document.getElementById("statusBox");
+    const txLine       = document.getElementById("txLine");
+
+    // small helper to show messages. kind = "ok" | "error" | "" (normal)
+    function say(message, kind) {
+      statusBox.textContent = message;
+      statusBox.className = "status " + (kind || "");
+    }
+
+    function showTx(hash) {
+      txLine.innerHTML =
+        'Transaction: <a href="https://sepolia.etherscan.io/tx/' + hash +
+        '" target="_blank" rel="noopener">' + hash.slice(0, 18) + '...</a>';
+    }
+
+    // ethers errors can be messy, this picks the most readable bit
+    function niceError(err) {
+      return err.reason || err.shortMessage || err.message || "Something went wrong";
+    }
+
+    // you need to connect first for pretty much everything
+    function needWallet() {
+      if (!contract) {
+        say("Connect your wallet first.", "error");
+        return true;
+      }
+      return false;
+    }
+
+    function needFile() {
+      if (!currentHash) {
+        say("Choose a file first.", "error");
+        return true;
+      }
+      return false;
+    }
+
+    // ---------- connect MetaMask ----------
+    async function connectWallet() {
+      if (!window.ethereum) {
+        say("MetaMask not found. Install it, then open this page from a local server (see README).", "error");
+        return;
+      }
+
+      try {
+        provider = new ethers.BrowserProvider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+
+        // make sure we're on Sepolia, otherwise ask MetaMask to switch
+        let network = await provider.getNetwork();
+        if (network.chainId !== SEPOLIA_CHAIN_ID) {
+          await window.ethereum.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: "0xaa36a7" }]
+          });
+          // network changed, so make a fresh provider
+          provider = new ethers.BrowserProvider(window.ethereum);
+        }
+
+        signer = await provider.getSigner();
+        const address = await signer.getAddress();
+        contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+
+        walletInfo.textContent = "Connected: " + address.slice(0, 6) + "..." + address.slice(-4) + " (Sepolia)";
+        connectBtn.textContent = "Connected";
+        say("Wallet connected.", "ok");
+
+        loadTotal();
+      } catch (err) {
+        console.log(err);
+        say("Could not connect: " + niceError(err), "error");
+      }
+    }
+
+    // ---------- turn the chosen file into a bytes32 fingerprint ----------
+    async function hashFile(file) {
+      const buffer = await file.arrayBuffer();
+      const digest = await crypto.subtle.digest("SHA-256", buffer);
+      const bytes = Array.from(new Uint8Array(digest));
+      return "0x" + bytes.map(function (b) {
+        return b.toString(16).padStart(2, "0");
+      }).join("");
+    }
+
+    fileInput.addEventListener("change", async function () {
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      currentHash = await hashFile(file);
+      fileHashBox.textContent = currentHash;
+      say("Got the fingerprint for " + file.name + ".");
+    });
+
+    // ---------- READ: total number of registered files ----------
+    async function loadTotal() {
+      if (needWallet()) return;
+      try {
+        const total = await contract.totalRegistered();
+        totalCount.textContent = total.toString();
+      } catch (err) {
+        console.log(err);
+        say("Could not read the count: " + niceError(err), "error");
+      }
+    }
+
+    // ---------- WRITE: register the file ----------
+    async function registerFile() {
+      if (needWallet() || needFile()) return;
+
+      const title = titleInput.value.trim();
+      if (title === "") {
+        say("Give your file a title first.", "error");
+        return;
+      }
+
+      try {
+        say("Waiting for you to confirm in MetaMask...");
+        const tx = await contract.registerContent(currentHash, title);
+        showTx(tx.hash);
+
+        say("Transaction sent. Waiting for it to be mined...");
+        await tx.wait();
+
+        say("Registered! \"" + title + "\" is now on the blockchain.", "ok");
+        loadTotal();
+      } catch (err) {
+        console.log(err);
+        say("Registration failed: " + niceError(err), "error");
+      }
+    }
+
+    // ---------- READ: check who registered a file ----------
+    async function checkFile() {
+      if (needWallet() || needFile()) return;
+
+      try {
+        const exists = await contract.isRegistered(currentHash);
+        if (!exists) {
+          say("Nobody has registered this file yet. You could be the first.");
+          return;
+        }
+
+        const result = await contract.getContent(currentHash);
+        const creator = result[0];
+        const title = result[1];
+        const when = new Date(Number(result[2]) * 1000).toLocaleString();
+
+        say("\"" + title + "\" is registered to " + creator + " on " + when + ".", "ok");
+      } catch (err) {
+        console.log(err);
+        say("Lookup failed: " + niceError(err), "error");
+      }
+    }
+
+    // ---------- WRITE: transfer ownership ----------
+    async function transferFile() {
+      if (needWallet() || needFile()) return;
+
+      const newOwner = transferTo.value.trim();
+      if (!ethers.isAddress(newOwner)) {
+        say("That doesn't look like a valid wallet address.", "error");
+        return;
+      }
+
+      try {
+        say("Waiting for you to confirm in MetaMask...");
+        const tx = await contract.transferOwnership(currentHash, newOwner);
+        showTx(tx.hash);
+
+        await tx.wait();
+        say("Ownership transferred to " + newOwner + ".", "ok");
+      } catch (err) {
+        console.log(err);
+        say("Transfer failed: " + niceError(err), "error");
+      }
+    }
+
+    // wire up the buttons
+    connectBtn.addEventListener("click", connectWallet);
+    registerBtn.addEventListener("click", registerFile);
+    lookupBtn.addEventListener("click", checkFile);
+    transferBtn.addEventListener("click", transferFile);
+    refreshBtn.addEventListener("click", loadTotal);
+  </script>
+</body>
+</html>

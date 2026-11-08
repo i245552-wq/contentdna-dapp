@@ -1,0 +1,180 @@
+/* ContentDNA mini - styles
+   colours I'm using:
+   ink     #221A33  (text)
+   paper   #EFEDF7  (page background)
+   card    #FBFAFE
+   accent  #5547D9
+*/
+
+:root {
+  --ink: #221A33;
+  --paper: #EFEDF7;
+  --card: #FBFAFE;
+  --accent: #5547D9;
+  --soft: #D9D4EE;
+  --ok: #1F7A5A;
+  --bad: #B3261E;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Karla", Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+main {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 40px 20px 60px;
+}
+
+header {
+  margin-bottom: 32px;
+}
+
+h1, h2 {
+  font-family: "Bricolage Grotesque", Georgia, serif;
+  line-height: 1.15;
+  margin: 0 0 12px;
+}
+
+h1 {
+  font-size: 2.6rem;
+  margin-top: 16px;
+}
+
+h2 {
+  font-size: 1.3rem;
+}
+
+section {
+  margin-bottom: 28px;
+}
+
+ol {
+  padding-left: 22px;
+  margin: 0;
+}
+
+li {
+  margin-bottom: 4px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--soft);
+  border-radius: 14px;
+  padding: 20px;
+}
+
+label {
+  display: block;
+  font-weight: 700;
+  margin: 16px 0 6px;
+}
+
+input[type="text"],
+input[type="file"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--soft);
+  border-radius: 8px;
+  background: white;
+  color: var(--ink);
+  font: inherit;
+}
+
+input[type="text"]:focus,
+button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button {
+  background: var(--accent);
+  color: white;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  padding: 10px 18px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 12px;
+}
+
+button:hover {
+  background: #4337B8;
+  border-color: #4337B8;
+}
+
+/* second-choice buttons: outlined instead of filled */
+button.secondary {
+  background: transparent;
+  color: var(--accent);
+}
+
+button.secondary:hover {
+  background: var(--soft);
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.muted {
+  color: #6A6180;
+  margin: 10px 0 4px;
+}
+
+/* the long hash needs to wrap, otherwise it breaks the layout on phones */
+code {
+  display: block;
+  background: white;
+  border: 1px dashed var(--soft);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+.status {
+  background: var(--card);
+  border-left: 5px solid var(--soft);
+  padding: 14px 16px;
+  border-radius: 6px;
+  word-break: break-word;
+}
+
+.status.ok {
+  border-left-color: var(--ok);
+}
+
+.status.error {
+  border-left-color: var(--bad);
+}
+
+a {
+  color: var(--accent);
+}
+
+footer {
+  font-size: 0.9rem;
+  color: #6A6180;
+  border-top: 1px solid var(--soft);
+  padding-top: 16px;
+}
+
+@media (max-width: 480px) {
+  h1 {
+    font-size: 2rem;
+  }
+}
