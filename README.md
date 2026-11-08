@@ -14,7 +14,8 @@ The file itself is never uploaded. The browser makes a SHA-256 hash of it and on
 
 * **Contract address:** `0xCC62c17d570ab8cbd85c1cFFf3D34001054E5Bb8`
 * **Etherscan:** https://sepolia.etherscan.io/address/0xCC62c17d570ab8cbd85c1cFFf3D34001054E5Bb8
-* **GitHub repo:** PASTE\_YOUR\_REPO\_LINK\_HERE
+* **GitHub repo:** (https://github.com/i245552-wq/contentdna-dapp)
+Live page: https://i245552-wq.github.io/contentdna-dapp/
 
 ### Functions
 
